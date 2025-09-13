@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wellness Monitor — Student</title>
+
+  <!-- Tailwind quick CDN for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* sticky table header */
+    .table-fixed thead th { position: sticky; top: 0; background: white; z-index: 5; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold">Wellness Monitor</h1>
+      <p class="text-sm text-slate-600">Track sleep, exercise, water, study breaks & mood. Get AI-style recommendations and alerts.</p>
+    </header>
+
+    <main class="grid grid-cols-12 gap-6">
+      <!-- Left: Input form & reminders -->
+      <section class="col-span-4 bg-white p-4 rounded-lg shadow">
+        <h2 class="text-lg font-medium mb-3">Log Today's Habits</h2>
+        <form id="logForm" class="space-y-2">
+          <label class="block text-sm">Date
+            <input id="entryDate" type="date" class="w-full border rounded p-2 mt-1" required />
+          </label>
+
+          <label class="block text-sm">Sleep (hours)
+            <input id="sleep" type="number" step="0.1" min="0" max="24" class="w-full border rounded p-2 mt-1" required />
+          </label>
+
+          <label class="block text-sm">Exercise (minutes)
+            <input id="exercise" type="number" min="0" class="w-full border rounded p-2 mt-1" />
+          </label>
+
+          <label class="block text-sm">Water (cups)
+            <input id="water" type="number" min="0" class="w-full border rounded p-2 mt-1" />
+          </label>
+
+          <label class="block text-sm">Study Breaks (count)
+            <input id="breaks" type="number" min="0" class="w-full border rounded p-2 mt-1" />
+          </label>
+
+          <label class="block text-sm">Mood / Stress (1 calm — 5 very stressed)
+            <input id="mood" type="range" min="1" max="5" value="3" class="w-full mt-1" />
+            <div id="moodLabel" class="text-xs text-slate-500 mt-1">3</div>
+          </label>
+
+          <div class="flex gap-2">
+            <button type="submit" class="flex-1 py-2 rounded bg-indigo-600 text-white">Save Entry</button>
+            <button type="button" id="clearBtn" class="py-2 px-3 rounded border">Clear</button>
+          </div>
+        </form>
+
+        <hr class="my-4" />
+
+        <h3 class="text-sm font-medium mb-2">Reminders</h3>
+        <div class="flex gap-2 mb-2">
+          <input id="remText" placeholder="Remind me to..." class="flex-1 border rounded p-2 text-sm" />
+          <input id="remDelay" type="number" placeholder="mins" class="w-20 border rounded p-2 text-sm" />
+        </div>
+        <div class="flex gap-2">
+          <button id="addRem" class="py-2 rounded bg-emerald-600 text-white flex-1">Set Reminder</button>
+          <button id="clearRem" class="py-2 rounded border">Clear All</button>
+        </div>
+        <ul id="remList" class="mt-3 text-sm text-slate-700"></ul>
+
+        <hr class="my-4" />
+        <h3 class="text-sm font-medium mb-2">Wearable Integration</h3>
+        <p class="text-xs text-slate-500 mb-2">Placeholder: connect to wearables or health APIs (e.g., Google Fit, Apple Health, or a BLE device).</p>
+        <button id="fakeWear" class="py-2 rounded border w-full text-sm">Simulate Wearable Sync</button>
+      </section>
+
+      <!-- Middle: Charts -->
+      <section class="col-span-5 bg-white p-4 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-lg font-medium">Wellness Dashboard</h2>
+          <div class="text-sm text-slate-500">Last 14 days</div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4">
+          <div class="p-2 border rounded">
+            <h4 class="text-sm font-medium mb-1">Sleep (hours)</h4>
+            <canvas id="sleepChart" style="height:140px"></canvas>
+          </div>
+
+          <div class="p-2 border rounded">
+            <h4 class="text-sm font-medium mb-1">Exercise (minutes) & Water (cups)</h4>
+            <canvas id="exerciseChart" style="height:160px"></canvas>
+          </div>
+
+          <div class="p-2 border rounded">
+            <h4 class="text-sm font-medium mb-1">Mood / Stress (1–5)</h4>
+            <canvas id="moodChart" style="height:140px"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Insights & Alerts -->
+      <aside class="col-span-3 bg-white p-4 rounded-lg shadow">
+        <h2 class="text-lg font-medium mb-3">AI Insights & Alerts</h2>
+
+        <div id="insights" class="text-sm text-slate-700 space-y-3">
+          <div class="p-2 border rounded">
+            <div class="font-medium">Recommendations</div>
+            <div id="recText" class="text-xs text-slate-500 mt-2">No data yet — save a few entries to get personalized suggestions.</div>
+            <button id="fetchRec" class="mt-2 py-1 text-xs rounded border">Fetch server recommendations (placeholder)</button>
+          </div>
+
+          <div class="p-2 border rounded">
+            <div class="font-medium">Recent Alerts</div>
+            <ul id="alerts" class="text-xs mt-2 text-slate-500"></ul>
+          </div>
+
+          <div class="p-2 border rounded">
+            <div class="font-medium">Progress</div>
+            <div class="text-xs text-slate-500 mt-2">Targets (example): Sleep ≥ 7h, Exercise ≥ 30min/day, Water ≥ 8 cups/day</div>
+            <div class="mt-2">
+              <div class="text-xs">Sleep</div>
+              <div class="w-full bg-slate-100 rounded h-3 mt-1"><div id="sleepBar" class="h-3 rounded bg-indigo-500" style="width:0%"></div></div>
+              <div class="text-xs mt-2">Exercise</div>
+              <div class="w-full bg-slate-100 rounded h-3 mt-1"><div id="exerciseBar" class="h-3 rounded bg-emerald-500" style="width:0%"></div></div>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+    </main>
+
+    <footer class="mt-6 text-xs text-slate-400">This is a frontend prototype. Replace rule-based suggestions with server ML for production.</footer>
+  </div>
+
+<script>
+/* Wellness Monitor - Single-file frontend logic
+   - Uses localStorage for entries
+   - Has simple rule-based recommendations (simulates AI)
+   - Charts via Chart.js
+   - Client-side reminders (works while page is open)
+*/
+
+// utils
+const daysBack = 14;
+function todayISO(d = new Date()) { return d.toISOString().slice(0,10); }
+function loadEntries() { return JSON.parse(localStorage.getItem('well_entries') || '[]'); }
+function saveEntries(list) { localStorage.setItem('well_entries', JSON.stringify(list)); }
+function addAlert(text) {
+  const ul = document.getElementById('alerts');
+  const li = document.createElement('li'); li.textContent = text; ul.prepend(li);
+}
+
+// Setup default date
+document.getElementById('entryDate').value = todayISO();
+
+// Mood slider label
+const moodEl = document.getElementById('mood');
+const moodLabel = document.getElementById('moodLabel');
+moodEl.addEventListener('input', () => moodLabel.textContent = moodEl.value);
+
+// Form actions
+document.getElementById('logForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const entry = {
+    date: document.getElementById('entryDate').value,
+    sleep: parseFloat(document.getElementById('sleep').value || 0),
+    exercise: parseFloat(document.getElementById('exercise').value || 0),
+    water: parseFloat(document.getElementById('water').value || 0),
+    breaks: parseInt(document.getElementById('breaks').value || 0),
+    mood: parseInt(document.getElementById('mood').value || 3),
+    createdAt: new Date().toISOString()
+  };
+  const list = loadEntries();
+  // replace any entry with same date
+  const other = list.filter(x => x.date !== entry.date);
+  other.push(entry);
+  saveEntries(other);
+  updateUI();
+  runSimpleAI(entry);
+  alert('Saved entry for ' + entry.date);
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=> {
+  if (!confirm('Clear all saved entries?')) return;
+  localStorage.removeItem('well_entries');
+  updateUI();
+});
+
+// Reminders
+let reminders = [];
+function renderReminders() {
+  const ul = document.getElementById('remList');
+  ul.innerHTML = '';
+  reminders.forEach((r, i) => {
+    const li = document.createElement('li');
+    li.className = 'mb-1 text-xs';
+    li.innerHTML = `${r.text} — in ${r.delay} min <button data-i="${i}" class="ml-2 text-red-500 text-xs">cancel</button>`;
+    ul.appendChild(li);
+  });
+}
+document.getElementById('addRem').addEventListener('click', ()=> {
+  const text = document.getElementById('remText').value.trim();
+  const delay = parseFloat(document.getElementById('remDelay').value || 0);
+  if (!text || !delay) return alert('Enter reminder text and delay (minutes).');
+  const id = Date.now();
+  const r = { id, text, delay, created: Date.now() };
+  reminders.push(r);
+  renderReminders();
+  // schedule
+  setTimeout(()=> {
+    alert('Reminder: ' + text);
+    addAlert('Reminder: ' + text);
+  }, delay * 60 * 1000);
+});
+document.getElementById('clearRem').addEventListener('click', ()=> {
+  reminders = []; renderReminders();
+});
+
+// Simulate wearable sync
+document.getElementById('fakeWear').addEventListener('click', ()=> {
+  const d = todayISO();
+  const list = loadEntries();
+  // simulate a step: if no entry, add a small one
+  if (!list.find(x => x.date === d)) {
+    list.push({ date: d, sleep: 7.2, exercise: 25, water: 6, breaks: 3, mood: 2, createdAt: new Date().toISOString()});
+    saveEntries(list);
+    updateUI();
+    alert('Simulated wearable data synced for today');
+  } else alert('Entry already exists for today');
+});
+
+// Recommendations fetch placeholder
+document.getElementById('fetchRec').addEventListener('click', async ()=> {
+  // In production: call your /api/recommendations with user data
+  // Example placeholder: show aggregated simple recs
+  const rec = generateRecommendations(loadEntries());
+  document.getElementById('recText').innerText = rec.join(' \\n ');
+  alert('Displayed local recommendations (replace with server ML for better results)');
+});
+
+// Simple rule-based "AI"
+function runSimpleAI(entry) {
+  // Check stress
+  if (entry.mood >= 4) {
+    addAlert(`High stress detected on ${entry.date}. Suggest short breathing exercise & 10-min walk.`);
+  }
+  // If low sleep
+  if (entry.sleep < 6) {
+    addAlert(`Low sleep (${entry.sleep}h) on ${entry.date}. Try to sleep earlier tonight.`);
+  }
+}
+
+// Aggregate recommendations
+function generateRecommendations(list) {
+  if (!list.length) return ['No data — log a few days to get insights.'];
+  // compute averages for last 7 days
+  const arr = list.slice().sort((a,b)=>a.date.localeCompare(b.date)).slice(-7);
+  const avg = arr.reduce((s,x)=>({ sleep: s.sleep + x.sleep, exercise: s.exercise + x.exercise, water: s.water + x.water }), {sleep:0, exercise:0, water:0});
+  avg.sleep /= arr.length; avg.exercise /= arr.length; avg.water /= arr.length;
+  const recs = [];
+  if (avg.sleep < 7) recs.push(`You're averaging ${avg.sleep.toFixed(1)}h sleep — aim for 7-8 hours.`);
+  else recs.push(`Good job — averaging ${avg.sleep.toFixed(1)}h sleep.`);
+  if (avg.exercise < 30) recs.push(`Exercise average ${Math.round(avg.exercise)} min — try short 20–30 min daily workouts.`);
+  else recs.push(`Exercise is good — keep it up!`);
+  if (avg.water < 8) recs.push(`Water intake ${Math.round(avg.water)} cups/day — aim for 8 cups.`);
+  // detect stress spikes
+  const highStress = arr.filter(x => x.mood >= 4).length;
+  if (highStress >= 2) recs.push(`Multiple high-stress days recently. Consider scheduling relaxation breaks and seek peer support.`);
+  return recs;
+}
+
+// Charts (Chart.js)
+let sleepChart, exerciseChart, moodChart;
+function initCharts() {
+  const sleepCtx = document.getElementById('sleepChart').getContext('2d');
+  sleepChart = new Chart(sleepCtx, { type: 'line', data: { labels: [], datasets: [{ label: 'Sleep (hours)', data: [], tension:0.3 }] }, options: { responsive: true } });
+
+  const exCtx = document.getElementById('exerciseChart').getContext('2d');
+  exerciseChart = new Chart(exCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'Exercise (min)', data: [] }, { label: 'Water (cups)', data: [], yAxisID: 'b' }] },
+    options: { responsive: true, scales: { b: { type: 'linear', position: 'right', grid: { display:false } } } }
+  });
+
+  const moodCtx = document.getElementById('moodChart').getContext('2d');
+  moodChart = new Chart(moodCtx, { type: 'line', data: { labels: [], datasets: [{ label: 'Mood (1-5)', data: [], tension:0.3 }] }, options: { responsive: true } });
+}
+
+// Update UI from localStorage
+function updateUI() {
+  const list = loadEntries().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  // prepare last N days
+  const start = new Date(); start.setDate(start.getDate() - (daysBack-1));
+  const labels = [];
+  const labelMap = {}; // map date->entry
+  for (let i=0;i<daysBack;i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const iso = d.toISOString().slice(0,10);
+    labels.push(iso);
+    labelMap[iso] = { sleep:0, exercise:0, water:0, mood:3, has:false };
+  }
+  list.forEach(e => { if (labelMap[e.date]) { labelMap[e.date] = { sleep: e.sleep||0, exercise: e.exercise||0, water: e.water||0, mood: e.mood||3, has:true }; } });
+
+  const sleepData = labels.map(l => labelMap[l].sleep);
+  const exData = labels.map(l => labelMap[l].exercise);
+  const waterData = labels.map(l => labelMap[l].water);
+  const moodData = labels.map(l => labelMap[l].mood);
+
+  // update charts
+  if (sleepChart) { sleepChart.data.labels = labels; sleepChart.data.datasets[0].data = sleepData; sleepChart.update(); }
+  if (exerciseChart) { exerciseChart.data.labels = labels; exerciseChart.data.datasets[0].data = exData; exerciseChart.data.datasets[1].data = waterData; exerciseChart.update(); }
+  if (moodChart) { moodChart.data.labels = labels; moodChart.data.datasets[0].data = moodData; moodChart.update(); }
+
+  // update progress bars (compare last 7-day averages vs targets)
+  const last7 = labels.slice(-7);
+  const avgSleep = average(last7.map(l => labelMap[l].sleep));
+  const avgExercise = average(last7.map(l => labelMap[l].exercise));
+  const sleepPct = Math.min(100, Math.round((avgSleep / 7) * 100)); // 7h target
+  const exPct = Math.min(100, Math.round((avgExercise / 30) * 100)); // 30min target
+  document.getElementById('sleepBar').style.width = sleepPct + '%';
+  document.getElementById('exerciseBar').style.width = exPct + '%';
+
+  // show recommendations if enough data
+  const rec = generateRecommendations(list);
+  document.getElementById('recText').innerText = rec.join(' \\n ');
+
+  // show alerts area already handled by addAlert calls. Could persist alerts too.
+}
+
+// helpers
+function average(arr) { if (!arr.length) return 0; return arr.reduce((s,x) => s + (Number(x)||0), 0) / arr.length; }
+
+// initial setup
+initCharts();
+updateUI();
+
+// utility: seed a bit of sample data if empty (for demo)
+if (!loadEntries().length) {
+  const sample = [
+    { date: todayISO(new Date(Date.now()-13*24*3600)), sleep:7.5, exercise:20, water:7, breaks:3, mood:2 },
+    { date: todayISO(new Date(Date.now()-12*24*3600)), sleep:6.0, exercise:10, water:5, breaks:2, mood:4 },
+    { date: todayISO(new Date(Date.now()-10*24*3600)), sleep:8.0, exercise:30, water:8, breaks:4, mood:1 },
+    { date: todayISO(new Date(Date.now()-6*24*3600)), sleep:5.5, exercise:0, water:4, breaks:1, mood:5 },
+    { date: todayISO(new Date(Date.now()-2*24*3600)), sleep:7.0, exercise:25, water:6, breaks:3, mood:3 },
+    { date: todayISO(), sleep:6.8, exercise:15, water:5, breaks:2, mood:3 }
+  ];
+  saveEntries(sample);
+  updateUI();
+}
+
+</script>
+</body>
+</html>
